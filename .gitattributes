@@ -1,0 +1,8 @@
+# Le fichier Packet Tracer est binaire : pas de fusion ni de conversion de fins de ligne
+*.pkt binary
+*.pka binary
+*.png binary
+
+# Configurations Cisco : fins de ligne Unix
+*.txt text eol=lf
+*.md  text eol=lf

@@ -1,0 +1,173 @@
+! =====================================================================
+!  SW-ACC2 - Switch d'acces etage 2 (Cisco 2960-24TT)
+!  Role : raccordement des postes COMMERCIAL, INFORMATIQUE et COMPTA (annexe)
+!  Projet : Reseau segmente de la PME Arvex - Cisco Packet Tracer
+! =====================================================================
+!  Coller bloc par bloc dans l'onglet CLI de l'equipement
+! =====================================================================
+enable
+configure terminal
+!
+! ---------------------------------------------------------------------
+! 1. Parametres generaux
+! ---------------------------------------------------------------------
+hostname SW-ACC2
+no ip domain-lookup
+ip domain-name arvex.lan
+service password-encryption
+service timestamps log datetime msec
+enable secret Arvex-Enable-2026
+username admin privilege 15 secret Arvex-Admin-2026
+banner motd #
+*****************************************************************
+  SW-ACC2 - Acces reserve au personnel autorise.
+  Toute connexion est journalisee.
+*****************************************************************
+#
+!
+! ---------------------------------------------------------------------
+! 2. VLANs (meme base que SW-CORE)
+! ---------------------------------------------------------------------
+vtp mode transparent
+!
+vlan 10
+ name DIRECTION
+vlan 20
+ name COMPTA
+vlan 30
+ name COMMERCIAL
+vlan 40
+ name SERVEURS
+vlan 50
+ name INFORMATIQUE
+vlan 99
+ name ADMIN
+vlan 998
+ name PARKING
+vlan 999
+ name NATIVE
+ exit
+!
+spanning-tree mode rapid-pvst
+!
+! ---------------------------------------------------------------------
+! 3. Trunk 802.1Q vers SW-CORE
+! ---------------------------------------------------------------------
+interface GigabitEthernet0/1
+ description TRUNK vers SW-CORE Fa0/2
+ switchport mode trunk
+ switchport trunk native vlan 999
+ switchport trunk allowed vlan 20,30,50,99,999
+ switchport nonegotiate
+ ip dhcp snooping trust
+ no shutdown
+ exit
+!
+! ---------------------------------------------------------------------
+! 4. Ports d'acces des postes
+! ---------------------------------------------------------------------
+interface range FastEthernet0/1 - 10
+ description Postes COMMERCIAL
+ switchport mode access
+ switchport access vlan 30
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ ip dhcp snooping limit rate 15
+ no shutdown
+ exit
+!
+interface range FastEthernet0/11 - 14
+ description Postes INFORMATIQUE
+ switchport mode access
+ switchport access vlan 50
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ ip dhcp snooping limit rate 15
+ no shutdown
+ exit
+!
+interface range FastEthernet0/15 - 18
+ description Postes COMPTA (annexe)
+ switchport mode access
+ switchport access vlan 20
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ ip dhcp snooping limit rate 15
+ no shutdown
+ exit
+!
+! ---------------------------------------------------------------------
+! 5. Ports inutilises : VLAN parking + desactives
+! ---------------------------------------------------------------------
+interface range FastEthernet0/19 - 24 , GigabitEthernet0/2
+ description NON UTILISE
+ switchport mode access
+ switchport access vlan 998
+ shutdown
+ exit
+!
+! ---------------------------------------------------------------------
+! 6. DHCP snooping : bloque les faux serveurs DHCP sur les ports d'acces
+!    (option 82 desactivee, sinon le relais de SW-CORE rejette les requetes)
+! ---------------------------------------------------------------------
+ip dhcp snooping
+ip dhcp snooping vlan 20,30,50
+no ip dhcp snooping information option
+!
+! ---------------------------------------------------------------------
+! 7. Adresse de management (VLAN 99)
+! ---------------------------------------------------------------------
+interface Vlan1
+ shutdown
+ exit
+interface Vlan99
+ description Management
+ ip address 10.10.99.12 255.255.255.0
+ no shutdown
+ exit
+ip default-gateway 10.10.99.1
+!
+! ---------------------------------------------------------------------
+! 8. Journalisation centralisee et synchronisation de l'heure
+! ---------------------------------------------------------------------
+logging host 10.10.40.10
+ntp server 10.10.40.10
+!
+! ---------------------------------------------------------------------
+! 9. Administration : SSH uniquement, depuis le VLAN 50 INFORMATIQUE
+! ---------------------------------------------------------------------
+access-list 10 remark Postes autorises a administrer le reseau
+access-list 10 permit 10.10.50.0 0.0.0.255
+!
+crypto key generate rsa general-keys modulus 2048
+ip ssh version 2
+ip ssh time-out 60
+ip ssh authentication-retries 3
+!
+line console 0
+ login local
+ exec-timeout 5 0
+ logging synchronous
+ exit
+!
+line vty 0 15
+ login local
+ transport input ssh
+ access-class 10 in
+ exec-timeout 10 0
+ exit
+!
+end
+write memory
